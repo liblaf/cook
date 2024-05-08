@@ -1,5 +1,6 @@
 import io
 import pathlib
+import uuid
 from collections.abc import Mapping
 from typing import TextIO
 
@@ -7,7 +8,7 @@ import cook
 import cook.ninja
 import cook.ninja.syntax
 import cook.recipe
-from cook.types import StrPath, StrPathList
+from cook._typing import StrPath, StrPathList
 
 
 class Menu:
@@ -38,11 +39,7 @@ class Menu:
         if command is None:
             rule_ = rule or "phony"
         else:
-            outputs_escaped: list[str] = cook.recipe.as_list(outputs)
-            outputs_escaped: list[str] = [
-                cook.ninja.syntax.escape_path(x) for x in outputs_escaped
-            ]
-            name: str = " ".join(outputs_escaped)
+            name: str = uuid.uuid1().hex
             rule_ = cook.recipe.Rule(
                 name=name, command=command, description=description
             )
