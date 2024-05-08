@@ -9,13 +9,10 @@ authors = [
 dependencies = ["pydantic>=2.7.1"]
 description = "Add your description here"
 license = { text = "MIT" }
-name = "cook"
+name = "liblaf-cook"
 readme = "README.md"
 requires-python = ">= 3.8"
 version = "0.0.0"
-
-[project.scripts]
-"cook" = "cook:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cook"]
