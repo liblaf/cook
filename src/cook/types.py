@@ -1,9 +1,9 @@
 from collections.abc import Sequence
 from os import PathLike
-from typing import Any
+from typing import Any, TypeAlias
 
-type StrPath = str | PathLike[str]
-type StrPathList = StrPath | Sequence[StrPath]
+StrPath: TypeAlias = str | PathLike[str]
+StrPathList: TypeAlias = StrPath | Sequence[StrPath]
 
 
 def is_sequence(obj: Any) -> bool:
