@@ -48,8 +48,12 @@ class Menu:
         rule = _rule.Rule(targets, deps, recipes, **kwargs)
         for t in targets:
             if t in self.rules:
-                logger.warning("overriding recipe for target '{}'", t)
-            self.rules[t] = rule
+                if recipes is None:
+                    self.rules[t].deps.extend(rule.deps)
+                else:
+                    logger.warning("overriding recipe for target '{}'", t)
+            else:
+                self.rules[t] = rule
         if phony:
             self.phony_targets.update(targets)
         else:

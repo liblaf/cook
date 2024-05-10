@@ -33,7 +33,7 @@ class Recipe(abc.ABC):
         try:
             await self._cook()
         except Exception as e:
-            logger.exception(e)
+            logger.error(e)
             if self.ctx["check"]:
                 raise
 

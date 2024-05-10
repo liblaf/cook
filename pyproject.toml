@@ -27,5 +27,5 @@ packages = ["src/cook"]
 allow-direct-references = true
 
 [tool.rye]
-dev-dependencies = ["icecream>=2.1.3", "ipykernel>=6.29.4"]
+dev-dependencies = ["icecream>=2.1.3"]
 managed = true

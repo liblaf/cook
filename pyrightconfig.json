@@ -1,8 +1,0 @@
-{
-  "typeCheckingMode": "strict",
-
-  "reportMissingTypeStubs": false,
-  "reportUnknownArgumentType": false,
-  "reportUnknownMemberType": false,
-  "reportUnknownVariableType": false
-}
