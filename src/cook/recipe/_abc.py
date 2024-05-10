@@ -1,26 +1,29 @@
+# pyright: reportTypedDictNotRequiredAccess=none
+from __future__ import annotations
+
 import abc
-import pathlib
-from typing import TypedDict, Unpack
+from typing import TYPE_CHECKING, TypedDict, Unpack
 
 from loguru import logger
+
+from cook import utils
+
+if TYPE_CHECKING:
+    import pathlib
 
 
 class RecipeContext(TypedDict, total=False):
     auto_deps: bool
     check: bool
-    cwd: pathlib.Path
+    cwd: pathlib.Path | None
     echo: bool
 
 
-class RecipeContextTotal(TypedDict, total=True):
-    auto_deps: bool
-    check: bool
-    cwd: pathlib.Path
-    echo: bool
-
-
-DEFAULT_CONTEXT = RecipeContextTotal(
-    auto_deps=True, check=True, cwd=pathlib.Path.cwd(), echo=True
+DEFAULT_CONTEXT = RecipeContext(
+    auto_deps=True,
+    check=True,
+    cwd=None,
+    echo=True,
 )
 
 
@@ -28,24 +31,27 @@ class Recipe(abc.ABC):
     ctx: RecipeContext
 
     def __init__(self, **kwargs: Unpack[RecipeContext]) -> None:
-        self.ctx = kwargs
+        self.ctx = utils.merge_dict(kwargs)  # pyright: ignore [reportAttributeAccessIssue]
 
     async def __call__(self, **kwargs: Unpack[RecipeContext]) -> None:
-        ctx: RecipeContextTotal = DEFAULT_CONTEXT | self.ctx | kwargs  # pyright: ignore [reportOperatorIssue]
+        await self.cook(**kwargs)
+
+    def auto_deps(self, **kwargs: Unpack[RecipeContext]) -> list[str]:
+        ctx: RecipeContext = utils.merge_dict(DEFAULT_CONTEXT, kwargs, self.ctx)  # pyright: ignore [reportAssignmentType]
+        if not ctx["auto_deps"]:
+            return []
+        return self._auto_deps()
+
+    async def cook(self, **kwargs: Unpack[RecipeContext]) -> None:
+        ctx: RecipeContext = utils.merge_dict(DEFAULT_CONTEXT, kwargs, self.ctx)  # pyright: ignore [reportAssignmentType]
         if ctx["echo"]:
             self._echo()
         try:
-            await self._call(**kwargs)
+            await self._call(**ctx)
         except Exception as e:
             logger.exception(e)
             if ctx["check"]:
                 raise
-
-    def auto_deps(self, **kwargs: Unpack[RecipeContext]) -> list[str]:
-        ctx: RecipeContextTotal = DEFAULT_CONTEXT | self.ctx | kwargs  # pyright: ignore [reportOperatorIssue]
-        if not ctx["auto_deps"]:
-            return []
-        return self._auto_deps()
 
     @abc.abstractmethod
     def _echo(self) -> None: ...

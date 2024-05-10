@@ -81,6 +81,8 @@ pyzmq==26.0.3
     # via jupyter-client
 rich==13.7.1
     # via typer
+sh==2.0.6
+    # via liblaf-cook
 shellingham==1.5.4
     # via typer
 six==1.16.0

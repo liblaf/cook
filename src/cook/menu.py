@@ -1,72 +1,74 @@
-import asyncio
+# pyright: reportTypedDictNotRequiredAccess=none
+import copy
 from collections.abc import Sequence
 from typing import Unpack
 
-import cook.utils
-from cook import recipe as _recipe
-from cook import rule as _rule
+from loguru import logger
+
+from cook import utils
 from cook._typing import StrPath, StrPathList
+from cook.recipe import Recipe
+from cook.rule import DEFAULT_CONTEXT as RULE_DEFAULT_CONTEXT
+from cook.rule import Rule, RuleContext
+from cook.runner import DEFAULT_CONTEXT as RUNNER_DEFAULT_CONTEXT
+from cook.runner import Runner, RunnerContext
 
 
-class MenuContext(_rule.RuleContext, total=False):
-    jobs: int
+class MenuContext(RuleContext, RunnerContext, total=False): ...
 
 
-class MenuContextTotal(_rule.RuleContextTotal, total=True):
-    jobs: int
-
-
-DEFAULT_CONTEXT = MenuContextTotal(**_rule.DEFAULT_CONTEXT, jobs=1)
+DEFAULT_CONTEXT = MenuContext(**RULE_DEFAULT_CONTEXT, **RUNNER_DEFAULT_CONTEXT)
 
 
 class Menu:
-    ctx: MenuContextTotal
-    sem: asyncio.Semaphore
-    rules: list[_rule.Rule]
+    ctx: MenuContext
+    phony_targets: set[str]
+    rules: dict[str, Rule]
 
     def __init__(self, **kwargs: Unpack[MenuContext]) -> None:
-        self.ctx = DEFAULT_CONTEXT | kwargs  # pyright: ignore [reportOperatorIssue]
-        self.sem = asyncio.Semaphore(self.ctx["jobs"])
-        self.rules = []
+        self.ctx = kwargs
+        self.phony_targets = set()
+        self.rules = {}
 
     def __contains__(self, target: str) -> bool:
-        return any(target in rule.targets for rule in self.rules)
+        return target in self.rules
 
-    def __getitem__(self, target: str) -> _rule.Rule:
-        for rule in self.rules:
-            if target in rule.targets:
-                return rule
-        raise KeyError(target)
+    def __getitem__(self, target: str) -> Rule:
+        return self.rules[target]
 
     def add(
         self,
         targets: StrPathList,
-        dependencies: StrPathList | None = None,
-        recipes: Sequence[StrPath | StrPathList | _recipe.Recipe] | None = None,
-        **kwargs: Unpack[_rule.RuleContext],
+        deps: StrPathList | None = None,
+        recipes: Sequence[StrPath | StrPathList | Recipe] | None = None,
+        *,
+        phony: bool = False,
+        **kwargs: Unpack[RuleContext],
     ) -> None:
-        ctx: MenuContext = self.ctx | kwargs  # pyright: ignore [reportOperatorIssue]
-        rule = _rule.Rule(targets, dependencies, recipes, **ctx)  # pyright: ignore [reportArgumentType]
-        self.rules.append(rule)
+        targets = utils.as_str_list(targets)
+        rule = Rule(targets, deps, recipes, **kwargs)
+        for t in targets:
+            if t in self:
+                logger.warning(f"ignoring old rule for target '{t}'")
+            if phony:
+                self.phony_targets.add(t)
+            self.rules[t] = rule
 
-    async def cook(self, *targets: StrPathList) -> None:
-        target_list: list[str] = cook.utils.as_str_list(targets)
-        await asyncio.gather(*[self._cook(t) for t in target_list])
+    async def cook(self, *targets: StrPath, **kwargs: Unpack[MenuContext]) -> None:
+        ctx: MenuContext = DEFAULT_CONTEXT | kwargs | self.ctx
+        runner = Runner(self.phony_targets, self._build_rules(**kwargs), **ctx)
+        await runner.cook(*targets)
 
-    async def _cook(self, target: str) -> None:
-        await self._cook_rule(self[target])
+    def _build_rules(self, **kwargs: Unpack[MenuContext]) -> dict[str, Rule]:
+        rules: dict[str, Rule] = copy.deepcopy(self.rules)
+        for k, v in rules.items():
+            rules[k] = self._gather_deps(v, **kwargs)
+        return rules
 
-    async def _cook_rule(self, rule: _rule.Rule) -> None:
-        deps: list[str] = self._gather_deps(rule)
-        await asyncio.gather(*[self._cook(d) for d in deps])
-        async with self.sem:
-            for r in rule.recipes:
-                await self._cook_recipe(r)
-
-    async def _cook_recipe(self, recipe: _recipe.Recipe) -> None:
-        await recipe()
-
-    def _gather_deps(self, rule: _rule.Rule) -> list[str]:
-        deps: list[str] = rule.deps
-        deps += [d for d in rule.auto_deps() if d in self]
-        return list(dict.fromkeys(deps))
+    def _gather_deps(self, rule: Rule, **kwargs: Unpack[MenuContext]) -> Rule:
+        result: Rule = copy.deepcopy(rule)
+        for d in rule.auto_deps(**kwargs):
+            if d in self:
+                result.deps.append(d)
+        result.deps = list(dict.fromkeys(result.deps))
+        return result

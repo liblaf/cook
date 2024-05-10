@@ -1,9 +1,13 @@
+fix = true
+show-fixes = true
 target-version = "py311"
+
+[format]
+docstring-code-format = true
 
 [lint]
 ignore = [
   "ANN101",
-  "ANN102",
   "ANN401",
   "ARG002",
   "BLE001",
@@ -15,9 +19,8 @@ ignore = [
   "D104",
   "D105",
   "D107",
-  "D407",
-  "D413",
-  "PLR0913",
-  "RUF012",
 ]
 select = ["ALL"]
+
+[lint.pydocstyle]
+convention = "google"

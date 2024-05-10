@@ -1,47 +1,46 @@
+# pyright: reportTypedDictNotRequiredAccess=none
 from collections.abc import Sequence
 from typing import Unpack
 
-import cook.recipe
-import cook.utils
+from cook import recipe as _r
+from cook import utils
 from cook._typing import StrPath, StrPathList
 
 
-class RuleContext(cook.recipe.RecipeContext, total=False):
-    phony: bool
+class RuleContext(_r.RecipeContext, total=False): ...
 
 
-class RuleContextTotal(cook.recipe.RecipeContextTotal, total=True):
-    phony: bool
-
-
-DEFAULT_CONTEXT = RuleContextTotal(**cook.recipe.DEFAULT_CONTEXT, phony=False)
+DEFAULT_CONTEXT = RuleContext(**_r.DEFAULT_CONTEXT)
 
 
 class Rule:
     ctx: RuleContext
     targets: list[str]
     deps: list[str]
-    recipes: list[cook.recipe.Recipe]
+    recipes: list[_r.Recipe]
 
     def __init__(
         self,
         targets: StrPathList,
         deps: StrPathList | None = None,
-        recipes: Sequence[StrPath | StrPathList | cook.recipe.Recipe] | None = None,
+        recipes: Sequence[StrPath | StrPathList | _r.Recipe] | None = None,
         **kwargs: Unpack[RuleContext],
     ) -> None:
-        self.ctx = kwargs
-        self.targets = cook.utils.as_str_list(targets)
-        self.deps = cook.utils.as_str_list(deps)
-        self.recipes = (
-            [cook.recipe.as_recipe(r, **kwargs) for r in recipes] if recipes else []
-        )
+        self.ctx = utils.merge_dict(kwargs)  # pyright: ignore [reportAttributeAccessIssue]
+        self.targets = utils.as_str_list(targets)
+        self.deps = utils.as_str_list(deps)
+        self.recipes = [_r.as_recipe(r) for r in recipes] if recipes else []
 
     def auto_deps(self, **kwargs: Unpack[RuleContext]) -> list[str]:
-        ctx: RuleContextTotal = DEFAULT_CONTEXT | self.ctx | kwargs  # pyright: ignore [reportOperatorIssue]
+        ctx: RuleContext = utils.merge_dict(DEFAULT_CONTEXT, kwargs, self.ctx)  # pyright: ignore [reportAssignmentType]
         if not ctx["auto_deps"]:
             return []
         auto_deps: list[str] = []
         for r in self.recipes:
-            auto_deps += r.auto_deps(**kwargs)
+            auto_deps += r.auto_deps(**ctx)
         return list(dict.fromkeys(auto_deps))
+
+    async def cook(self, **kwargs: Unpack[RuleContext]) -> None:
+        ctx: RuleContext = utils.merge_dict(DEFAULT_CONTEXT, kwargs, self.ctx)  # pyright: ignore [reportAssignmentType]
+        for r in self.recipes:
+            await r.cook(**ctx)
