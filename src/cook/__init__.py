@@ -1,3 +1,3 @@
-from cook.menu import Menu
+from cook.core.menu import Menu
 
 __all__ = ["Menu"]
